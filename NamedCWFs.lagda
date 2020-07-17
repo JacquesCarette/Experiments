@@ -6,14 +6,22 @@ Modelled on Palmgren's work, from
 \begin{code}
 module NamedCWFs where
 
+open import Data.Char using (Char) -- to have 1-letter variables names...
+import Data.Nat as ℕ
+import Data.Fin as Fin
+import Data.List as List
 open import Data.List.Fresh
-open import Data.Product using (Σ; proj₁; proj₂)
+open import Data.Nat using (ℕ)
+open import Data.Product using (Σ; proj₁; proj₂; _,_)
+open import Data.Unit using (tt)
 open import Level
-open import Relation.Nullary using (Dec)
+open import Relation.Nullary using (Dec; ¬_)
+open import Relation.Nullary.Negation using (¬?)
 open import Relation.Unary using (∁; Pred)
 open import Relation.Binary using (Decidable; Setoid)
 open import Relation.Binary.PropositionalEquality as ≡
-  using (_≡_; refl)
+  using (_≡_; _≢_; refl)
+open import Relation.Nary using (⌊_⌋)
 
 open import Categories.Category.Core using (Category)
 open import Categories.Category.Instance.Sets -- ?
@@ -24,17 +32,16 @@ open import Categories.Object.Terminal
 One of the first things we need is a "theory of names". We don't quite
 know all we will need, so separate it out.
 
-We definitely need a 'set' of variables. We want it to be discrete, in
-a way that our host theory understands: in other words, we want
-propositional equality for our variables to be decidable.
+We definitely need a 'set' of variables. You would think that it
+would need to be discrete (i.e. have decidable equality), but this in
+fact is not needed anywhere in the definition of CwFN below.
 \begin{code}
 record Variables {v : Level} : Set (suc v) where
   field
     V : Set v
-    ≡-dec : Decidable (_≡_ {A = V})
 
   V# : Set v
-  V# = List# V _≡_
+  V# = List# V _≢_
 \end{code}
 
 And now we try to define CWF.
@@ -44,14 +51,14 @@ private
   variable
     o ℓ e v o′ o″ : Level
 
-record CWF (Var : Variables {v}) : Set (suc (v ⊔ o ⊔ ℓ ⊔ e ⊔ o′ ⊔ o″)) where
+record CwFN (Var : Variables {v}) : Set (suc (v ⊔ o ⊔ ℓ ⊔ e ⊔ o′ ⊔ o″)) where
   open Setoid renaming (_≈_ to _≈S_)
   field
     C : Category o ℓ e
     T : Terminal C
   open Category C
-  open Variables Var
-  open Terminal T
+  open Variables Var public
+  open Terminal T public
   field
     names : Obj → V#
     names-⊤ : names ⊤ ≡ []
@@ -61,10 +68,10 @@ The variables that are free in a context are then 'easily' definable using
 fresh lists:
 \begin{code}
   free : Obj → Set v
-  free Γ = Σ V (λ v → fresh V _≡_ v (names Γ))
+  free Γ = Σ V (λ v → fresh V _≢_ v (names Γ))
 \end{code}
 
-We have types, modeled as functors into types.
+We have types, modeled as functors into the category of ``Sets''.
 \begin{code}
   field
     TyF : Functor op (Sets o′)
@@ -90,6 +97,7 @@ some abbreviations that make this more apparent.
 And now we get to context extensions, which represent adding a new name to a context.
 
 \begin{code}
+  infixl 10 Ext
   field
     Ext : (Γ : Ctx) (A : Ty Γ) (x : free Γ) → Ctx
   syntax Ext Γ A x = Γ ∙ x ⦂ A
@@ -115,7 +123,7 @@ for which we'll ask for evidence.
   _≋_[_] {_} {A} a b = λ { refl → a ≡ b}
 \end{code}
 
-This lets us define term-level substitution, which is "functorial".
+This lets us define term-level substitution, which is functorial.
 \begin{code}
   field
     _⟦_⟧ : {Γ Δ : Obj} {A : Ty Γ} → Tm A → (f : Sub Δ Γ) → Tm (A ⦅ f ⦆)
